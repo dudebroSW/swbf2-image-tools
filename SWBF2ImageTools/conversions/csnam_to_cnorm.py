@@ -7,7 +7,7 @@ from typing import Any, Callable, Optional, Sequence
 from PySide6.QtWidgets import QCheckBox, QComboBox, QGridLayout, QLabel, QWidget
 from PIL import Image
 
-from ..core.image_io import extract_channel, invert_l, open_rgba, resize_l, save_image
+from ..core.image_io import extract_channel, invert_l, open_rgba, resize_l, save_image, force_normal_blue_channel
 from ..models.config import GlobalConfig, JobBase
 from .base import ConversionDefinition, DetectedInput
 
@@ -21,6 +21,7 @@ class CsNamJob(JobBase):
     ao_channel: str
     metallic_channel: str
     drop_orm_alpha: bool
+    force_normal_blue_channel: bool
 
 
 def _parse_prefix_and_suffix(path: Path) -> Optional[tuple[str, str]]:
@@ -70,7 +71,10 @@ def _process_pair(prefix: str, cs_path: Path, nam_path: Path, cfg: CsNamJob) -> 
     save_image(cs_rgba.convert("RGB"), out_c, g)
 
     # _N
-    save_image(nam_rgba.convert("RGB"), out_n, g)
+    n_rgb = nam_rgba.convert("RGB")
+    if cfg.force_normal_blue_channel:
+        n_rgb = force_normal_blue_channel(n_rgb)
+    save_image(n_rgb, out_n, g)
 
     # _ORM
     ao = extract_channel(nam_rgba, cfg.ao_channel)
@@ -103,6 +107,7 @@ class CsNamToCnormConversion(ConversionDefinition):
         self._metal_combo: Optional[QComboBox] = None
         self._invert_cb: Optional[QCheckBox] = None
         self._drop_alpha_cb: Optional[QCheckBox] = None
+        self._force_normal_cb: Optional[QCheckBox] = None
 
     def build_settings_widget(self) -> QWidget:
         if self._widget is not None:
@@ -129,6 +134,9 @@ class CsNamToCnormConversion(ConversionDefinition):
         self._drop_alpha_cb = QCheckBox("Drop alpha channel from _ORM output")
         self._drop_alpha_cb.setChecked(True)
 
+        self._force_normal_cb = QCheckBox("Force _N blue channel to 255")
+        self._force_normal_cb.setChecked(True)
+
         grid.addWidget(QLabel("Smoothness channel in *_CS:"), 0, 0)
         grid.addWidget(self._smooth_combo, 0, 1)
 
@@ -139,7 +147,8 @@ class CsNamToCnormConversion(ConversionDefinition):
         grid.addWidget(self._metal_combo, 2, 1)
 
         grid.addWidget(self._invert_cb, 3, 0, 1, 2)
-        grid.addWidget(self._drop_alpha_cb, 4, 0, 1, 2)
+        grid.addWidget(self._force_normal_cb, 4, 0, 1, 2)
+        grid.addWidget(self._drop_alpha_cb, 5, 0, 1, 2)
 
         w.setLayout(grid)
         self._widget = w
@@ -161,7 +170,7 @@ class CsNamToCnormConversion(ConversionDefinition):
         ]
 
     def make_job_config(self, input_folder: Path, output_folder: Path, global_cfg: GlobalConfig) -> CsNamJob:
-        assert self._smooth_combo and self._ao_combo and self._metal_combo and self._invert_cb and self._drop_alpha_cb
+        assert self._smooth_combo and self._ao_combo and self._metal_combo and self._invert_cb and self._drop_alpha_cb and self._force_normal_cb
 
         return CsNamJob(
             conversion_id=self.id,
@@ -173,6 +182,7 @@ class CsNamToCnormConversion(ConversionDefinition):
             ao_channel=self._ao_combo.currentText(),
             metallic_channel=self._metal_combo.currentText(),
             drop_orm_alpha=self._drop_alpha_cb.isChecked(),
+            force_normal_blue_channel=self._force_normal_cb.isChecked(),
         )
 
     def run(

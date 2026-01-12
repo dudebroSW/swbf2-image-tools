@@ -33,6 +33,12 @@ def resize_l(img_l: Image.Image, size_wh: Tuple[int, int]) -> Image.Image:
         img_l = img_l.convert("L")
     return img_l.resize(size_wh, resample=Image.Resampling.LANCZOS)
 
+def force_normal_blue_channel(img_rgb: Image.Image) -> Image.Image:
+    if img_rgb.mode != "RGB":
+        img_rgb = img_rgb.convert("RGB")
+    r, g, _b = img_rgb.split()
+    blue = Image.new("L", img_rgb.size, 255)
+    return Image.merge("RGB", (r, g, blue))
 
 def save_image(img: Image.Image, out_path: Path, global_cfg: GlobalConfig) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
